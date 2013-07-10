@@ -17,6 +17,7 @@ io.sockets.on('connection', function (socket) {
     var connect = net.connect(data.port, data.host, function () {
       socket.emit('connect-result', { ok: true });
       socket.on('send', function(data) {
+        console.log("about to send: " + JSON.stringify(data.data));
         connect.write(data.data);
       });
       connect.on('data', function(data) {
@@ -27,6 +28,12 @@ io.sockets.on('connection', function (socket) {
       });
       socket.on('close', function() {
         connect.close();
+      });
+      socket.on('error', function(err) {
+        console.log('socket error: ' + err);
+      });
+      connect.on('error', function(err) {
+        console.log('connection error: ' + err);
       });
     });
   });

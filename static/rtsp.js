@@ -51,7 +51,11 @@ var DelegatedSocket = function(host, port) {
 
 DelegatedSocket.prototype = {
   send: function(data) {
-    this._socket.emit('send', { data: data });
+    try {
+      this._socket.emit('send', { data: data });
+    } catch (e) {
+      console.log(e);
+    }
   },
   close: function() {
     this._socket.emit('close');
@@ -60,8 +64,46 @@ DelegatedSocket.prototype = {
   onconnected: null
 };
 
-function testhttp(host, port) {
+var RTSP_INIT = 0,
+    RTSP_OPTION_SENT = 1,
+    RTSP_DESCRIBE_SENT = 2;
+
+function RtspResponse(data) {
+  function getOneLine(txt) {
+    var i = txt.indexOf('\r\n');
+    return [txt.slice(0, i), txt.slice(i+2)];
+  }
+
+  // parse header.
+  var parsedStatusLine, i;
+  [this.statusLine, data] = getOneLine(data);
+  
+  parsedStatusLine = /^RTSP\/([0-9\.]+) ([0-9]+) (\w+)$/.exec(this.statusLine);
+  this.statusCode = parseInt(parsedStatusLine[2]);
+  this.rtspVersion = parsedStatusLine[1];
+  this.status = parsedStatusLine[3];
+
+  this.headers = [];
+  var tmp;
+  [tmp, data] = getOneLine(data);
+  while(tmp && tmp.length > 0 ) {
+    var headerline = /^([^:]+):[ ]+(.+)$/.exec(tmp);
+    this.headers.push([headerline[1], headerline[2]]);
+    [tmp, data] = getOneLine(data);
+  }
+  this.content = data;
+}
+
+RtspResponse.prototype = {
+  dump: function() {
+    console.log("RtspResponse: " + this.statusLine + ", " + this.statusCode);
+    console.log(" headers: " + JSON.stringify(this.headers));
+  }
+};
+
+function testrtsp(host, port) {
   var sck = new DelegatedSocket(host, port);
+  var self = this;
   sck.onconnected = function() {
     c.log('connected');
     sck.send('OPTIONS rtsp://v3.cache2.c.youtube.com/CjYLENy73wIaLQl3D7QL_mpcsxMYDSANFEIJbXYtZ29vZ2xlSARSBXdhdGNoYM7uhMP11rrfTww=/0/0/0/video.3gp RTSP/1.0\r\n' +
@@ -73,20 +115,70 @@ function testhttp(host, port) {
              'RegionData: 0\r\n' +
              'PlayerStarttime: [28/03/2003:22:50:23 00:00]\r\n' +
              'ClientID: Linux_2.4_6.0.9.1235_play32_RN01_EN_586\r\n' +
-//             'Date: Fri, 01 Feb 2013 03:02:22 GMT\r\n' +
+             'Date: ' + new Date() + '\r\n' +
              '\r\n');
+    self._status = RTSP_OPTION_SENT;
+    self._sck = sck;
+    self._seq = 2;
   };
   sck.onrecv = function(data) {
     c.log(data);
+    setTimeout(self.handleRtspResponse.bind(self), 0, data);
   };
 }
 
-function getSdp(host, port) {
+testrtsp.prototype = {
+  _status: RTSP_INIT,
+  handleRtspResponse: function(data) {
+    var resp = new RtspResponse(data);
+    resp.dump();
+    switch (this._status) {
+    case RTSP_OPTION_SENT:
+      if (resp.statusCode == 200) {
+        // server says ok, we can send our description
+        console.log("Will send describe");
+        this._sck.send('DESCRIBE rtsp://v3.cache2.c.youtube.com/CjYLENy73wIaLQl3D7QL_mpcsxMYDSANFEIJbXYtZ29vZ2xlSARSBXdhdGNoYM7uhMP11rrfTww=/0/0/0/video.3gp RTSP/1.0\r\n' +
+                       'CSeq:' + (this._seq++) + '\r\n' +
+                       'Date: ' + new Date() + '\r\n' +
+                       'Accept: application/sdp\r\n' +
+                      '\r\n');
+        this._status = RTSP_DESCRIBE_SENT;
+      }
+      break;
+    case RTSP_DESCRIBE_SENT:
+      // Got sdp.
+      initPeerConnectionWithSdp(resp.content);
+      break;
+    }
+  },
+  sendPort: function(msg) {
+    this._sck.send("SETUP rtsp://v3.cache2.c.youtube.com/CjYLENy73wIaLQl3D7QL_mpcsxMYDSANFEIJbXYtZ29vZ2xlSARSBXdhdGNoYM7uhMP11rrfTww=/0/0/0/video.3gp/trackID=0 RTSP/1.0\r\n"+
+                   "CSeq: " + (this._seq++) + "\r\n" +
+                   "Transport: RTP/AVP;unicast;client_port=" +  + "\r\n" +
+                   "Date: " + new Date() + "\r\n" +
+                   "\r\n");
+    this._status(
+  }
+};
 
-  
+var pc;
+var rtsp;
+function fail(err) {
+  console.error(err);
+}
+
+function initPeerConnectionWithSdp(sdp) {
+  console.log("SDP: " + sdp);
+  pc = new mozRTCPeerConnection();
+  navigator.mozGetUserMedia({audio: true, fake:true}, function(s) {
+    pc.addStream(s);
+    pc.createOffer(function (ans) {
+      console.log("answer: " + JSON.stringify(ans.sdp));
+    }, fail);
+  }, fail);
 };
 
 $(document).ready(function() {
   c.log('1');
-  testhttp('74.125.214.50', 554);
+  rtsp = new testrtsp('74.125.214.50', 554);
 });
