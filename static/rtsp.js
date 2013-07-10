@@ -1,5 +1,5 @@
 var vdo;
-console.log("test");
+var c = console;
 function startRTSP(rawSdp) {
   var pc = new mozRTCPeerConnection();
   var offer = formOffer(rawSdp);
@@ -23,7 +23,7 @@ function startRTSP(rawSdp) {
 }
 
 var DelegatedSocket = function(host, port) {
-  console.log('test');
+  c.log('DelegatedSocket');
   var socket = io.connect('http://localhost:8000');
   var self = this;
   socket.on('hello', function (data) {
@@ -63,11 +63,21 @@ DelegatedSocket.prototype = {
 function testhttp(host, port) {
   var sck = new DelegatedSocket(host, port);
   sck.onconnected = function() {
-    console.log('connected');
-    sck.send('GET / HTTP/1.1\r\n\r\n');
+    c.log('connected');
+    sck.send('OPTIONS rtsp://v3.cache2.c.youtube.com/CjYLENy73wIaLQl3D7QL_mpcsxMYDSANFEIJbXYtZ29vZ2xlSARSBXdhdGNoYM7uhMP11rrfTww=/0/0/0/video.3gp RTSP/1.0\r\n' +
+             'CSeq: 1\r\n' +
+             'User-Agent: RealMedia Player Version 6.0.9.1235 (linux-2.0-libc6-i386-gcc2.95)\r\n' +
+             'ClientChallenge: 9e26d33f2984236010ef6253fb1887f7\r\n' +
+             'CompanyID: KnKV4M4I/B2FjJ1TToLycw==\r\n' +
+             'GUID: 00000000-0000-0000-0000-000000000000\r\n' +
+             'RegionData: 0\r\n' +
+             'PlayerStarttime: [28/03/2003:22:50:23 00:00]\r\n' +
+             'ClientID: Linux_2.4_6.0.9.1235_play32_RN01_EN_586\r\n' +
+//             'Date: Fri, 01 Feb 2013 03:02:22 GMT\r\n' +
+             '\r\n');
   };
   sck.onrecv = function(data) {
-    connect.log(data);
+    c.log(data);
   };
 }
 
@@ -76,7 +86,7 @@ function getSdp(host, port) {
   
 };
 
-// $(document).ready(function() {
-console.log('1');
-  // testhttp('www.google.com', 80);
-// });
+$(document).ready(function() {
+  c.log('1');
+  testhttp('74.125.214.50', 554);
+});

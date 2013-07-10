@@ -5,10 +5,13 @@ var express = require('express'),
     io = require('socket.io').listen(server),
     net = require('net');
 
-app.use(express.static(__dirname + "/static"));
 app.use(express.logger());
+app.use(express.static(__dirname + "/static"));
+
+console.log("resaefseraser");
 
 io.sockets.on('connection', function (socket) {
+  console.log("recv connection");
   socket.emit('hello');
   socket.on('connect', function (data) {
     var connect = net.connect(data.port, data.host, function () {
@@ -20,7 +23,7 @@ io.sockets.on('connection', function (socket) {
         socket.emit('recv', { data: data.toString('utf8') });
       });
       connect.on('close', function() {
-        socket.close();
+        socket.disconnect();
       });
       socket.on('close', function() {
         connect.close();
